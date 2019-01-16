@@ -16,6 +16,9 @@ export class AnnotationsSrv {
   globalAnnotationsPromise: any;
   alertStatesPromise: any;
   datasourcePromises: any;
+  builtInDatasource: string;
+
+  defaultDatasource = '-- Grafana --';
 
   /** @ngInject */
   constructor(private $rootScope, private $q, private datasourceSrv, private backendSrv, private timeSrv) {}
@@ -93,6 +96,8 @@ export class AnnotationsSrv {
   getGlobalAnnotations(options) {
     const dashboard = options.dashboard;
 
+    this.builtInDatasource = _.filter(this.timeSrv.dashboard.annotations.list, (v: any) => v.builtIn)[0].datasource;
+
     if (this.globalAnnotationsPromise) {
       return this.globalAnnotationsPromise;
     }
@@ -137,24 +142,124 @@ export class AnnotationsSrv {
     return this.globalAnnotationsPromise;
   }
 
+  _checkPermission(annotation: any) {
+    const user: any = this.backendSrv.contextSrv.user;
+    if (annotation.userId !== user.id && !user.isGrafanaAdmin) {
+      this.$rootScope.appEvent('alert-warning', [
+        'Edit permission denied',
+      ]);
+      return false;
+    }
+
+    return true;
+  }
+
+  _promiseWriteInfluxDB(annotation: any, create = true) {
+    return this.datasourceSrv.get(this.builtInDatasource).then( (ds) => {
+      const id = (create === true ? new Date().getTime() : annotation.id);
+
+      let payload = 'events,id=' + id + ' ';
+      if (create) {
+        const user: any = this.backendSrv.contextSrv.user;
+        payload += 'userId=' + user.id + ',';
+        payload += 'login="' + user.login + '",';
+        payload += 'avatarUrl="' + user.gravatarUrl + '",';
+        payload += 'email="' + user.email + '",';
+      } else {
+        if (!this._checkPermission(annotation)) {
+          return;
+        }
+      }
+
+      payload += 'panelId=' + annotation.panelId + ',';
+      payload += 'dashboardId=' + annotation.dashboardId + ',';
+      // payload += 'isRegion=' + annotation.isRegion + ',';
+      payload += 'tags="' + annotation.tags.join(',') + '",';
+      payload += 'text="' + annotation.text + '" ';
+
+      payload += ' ' + annotation.time + '000000';
+
+      return this.backendSrv.$http({
+        url: ds.urls[0] + '/write?db=' + ds.database,
+        method: 'POST',
+        data: payload,
+      }).then((rsp) => {
+        this.$rootScope.appEvent('alert-success', [
+          'Update annotation to InfluxDB',
+        ]);
+      }, err => {
+        this.$rootScope.appEvent('alert-warning', [
+          'Failed write annotation to InfluxDB',
+        ]);
+        console.log(err);
+      });
+    });
+  }
+
   saveAnnotationEvent(annotation) {
     this.globalAnnotationsPromise = null;
-    return this.backendSrv.post('/api/annotations', annotation);
+
+    if (this.builtInDatasource === this.defaultDatasource) {
+      return this.backendSrv.post('/api/annotations', annotation);
+
+    } else {
+      return this._promiseWriteInfluxDB(annotation, true);
+    }
   }
 
   updateAnnotationEvent(annotation) {
     this.globalAnnotationsPromise = null;
-    return this.backendSrv.put(`/api/annotations/${annotation.id}`, annotation);
+
+    const datasource = annotation.source.datasource;
+    if (datasource === this.defaultDatasource) {
+      return this.backendSrv.put(`/api/annotations/${annotation.id}`, annotation);
+
+    } else {
+      return this._promiseWriteInfluxDB(annotation, false);
+    }
   }
 
   deleteAnnotationEvent(annotation) {
     this.globalAnnotationsPromise = null;
-    let deleteUrl = `/api/annotations/${annotation.id}`;
-    if (annotation.isRegion) {
-      deleteUrl = `/api/annotations/region/${annotation.regionId}`;
-    }
 
-    return this.backendSrv.delete(deleteUrl);
+    const datasource = annotation.source.datasource;
+    if (datasource === this.defaultDatasource) {
+      // -- Grafana --
+      let deleteUrl = `/api/annotations/${annotation.id}`;
+      if (annotation.isRegion) {
+        deleteUrl = `/api/annotations/region/${annotation.regionId}`;
+      }
+
+      return this.backendSrv.delete(deleteUrl);
+
+    } else {
+      return this.datasourceSrv.get(datasource).then( (ds) => {
+        // InfluxDB
+        if (!this._checkPermission(annotation)) {
+          return;
+        }
+
+        const payload: any = {
+          'db': ds.database,
+          'q': 'DELETE FROM events WHERE "id" = \'' + annotation.id + '\'',
+        };
+
+        return this.backendSrv.$http({
+          url: ds.urls[0] + '/query',
+          method: 'POST',
+          params: payload,
+        }).then((rsp) => {
+          this.$rootScope.appEvent('alert-success', [
+            'Deleted annotation to InfluxDB',
+          ]);
+        }, err => {
+          this.$rootScope.appEvent('alert-warning', [
+            'Failed delete annotation to InfluxDB',
+          ]);
+          console.log(err);
+        });
+      });
+    }
   }
 
   translateQueryResult(annotation, results) {
