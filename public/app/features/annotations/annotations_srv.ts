@@ -156,43 +156,66 @@ export class AnnotationsSrv {
 
   _promiseWriteInfluxDB(annotation: any, create = true) {
     return this.datasourceSrv.get(this.builtInDatasource).then( (ds) => {
-      const id = (create === true ? new Date().getTime() : annotation.id);
-
-      let payload = 'events,id=' + id + ' ';
-      if (create) {
-        const user: any = this.backendSrv.contextSrv.user;
-        payload += 'userId=' + user.id + ',';
-        payload += 'login="' + user.login + '",';
-        payload += 'avatarUrl="' + user.gravatarUrl + '",';
-        payload += 'email="' + user.email + '",';
-      } else {
-        if (!this._checkPermission(annotation)) {
-          return;
-        }
+      if (!this._checkPermission(annotation)) {
+        return;
       }
 
-      payload += 'panelId=' + annotation.panelId + ',';
-      payload += 'dashboardId=' + annotation.dashboardId + ',';
-      // payload += 'isRegion=' + annotation.isRegion + ',';
-      payload += 'tags="' + annotation.tags.join(',') + '",';
-      payload += 'text="' + annotation.text + '" ';
+      if (create) {
+        return this._insertInfluxDB(ds, annotation, true);
+      }
 
-      payload += ' ' + annotation.time + '000000';
+      const payload: any = {
+        'db': ds.database,
+        'q': 'DELETE FROM events WHERE id = \'' + annotation.id + '\'',
+      };
 
       return this.backendSrv.$http({
-        url: ds.urls[0] + '/write?db=' + ds.database,
+        url: ds.urls[0] + '/query',
         method: 'POST',
-        data: payload,
+        params: payload,
       }).then((rsp) => {
-        this.$rootScope.appEvent('alert-success', [
-          'Update annotation to InfluxDB',
-        ]);
+        return this._insertInfluxDB(ds, annotation, false);
       }, err => {
         this.$rootScope.appEvent('alert-warning', [
-          'Failed write annotation to InfluxDB',
+          'Failed update annotation to InfluxDB',
         ]);
         console.log(err);
       });
+
+    });
+  }
+
+  _insertInfluxDB(ds: any, annotation: any, create = true) {
+    const id = (create === true ? new Date().getTime() : annotation.id);
+
+    let payload = 'events,id=' + id + ' ';
+    const user: any = this.backendSrv.contextSrv.user;
+    payload += 'userId=' + user.id + ',';
+    payload += 'login="' + user.login + '",';
+    payload += 'avatarUrl="' + user.gravatarUrl + '",';
+    payload += 'email="' + user.email + '",';
+
+    payload += 'panelId=' + annotation.panelId + ',';
+    payload += 'dashboardId=' + annotation.dashboardId + ',';
+    // payload += 'isRegion=' + annotation.isRegion + ',';
+    payload += 'tags="' + annotation.tags.join(',') + '",';
+    payload += 'text="' + annotation.text + '" ';
+
+    payload += ' ' + annotation.time + '000000';
+
+    return this.backendSrv.$http({
+      url: ds.urls[0] + '/write?db=' + ds.database,
+      method: 'POST',
+      data: payload,
+    }).then((rsp) => {
+      this.$rootScope.appEvent('alert-success', [
+        'Update annotation to InfluxDB',
+      ]);
+    }, err => {
+      this.$rootScope.appEvent('alert-warning', [
+        'Failed write annotation to InfluxDB',
+      ]);
+      console.log(err);
     });
   }
 
