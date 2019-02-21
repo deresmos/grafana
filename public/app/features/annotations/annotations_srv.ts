@@ -143,6 +143,10 @@ export class AnnotationsSrv {
   }
 
   _checkPermission(annotation: any) {
+    if (annotation.userId === undefined) {
+      return true;
+    }
+
     const user: any = this.backendSrv.contextSrv.user;
     if (annotation.userId !== user.id && !user.isGrafanaAdmin) {
       this.$rootScope.appEvent('alert-warning', [
