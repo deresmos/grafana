@@ -7,6 +7,7 @@
 		<div class="graph-annotation__title">
 			<span ng-if="!ctrl.event.id">Add Annotation</span>
 			<span ng-if="ctrl.event.id">Edit Annotation</span>
+			<span>to {{ctrl.annotationsSrv.builtInDatasource}}</span>
 		</div>
 
     <div class="graph-annotation__time">{{ctrl.timeFormated}}</div>
@@ -17,6 +18,11 @@
 			<div class="gf-form gf-form--v-stretch">
 				<span class="gf-form-label width-7">Description</span>
 				<textarea class="gf-form-input width-20" rows="2" ng-model="ctrl.event.text"  placeholder="Description"></textarea>
+			</div>
+
+			<div class="gf-form gf-form--v-stretch">
+				<span class="gf-form-label width-7">Date</span>
+				<textarea class="gf-form-input width-20" rows="1" ng-model="ctrl.timeFormated"  placeholder="Date"></textarea>
 			</div>
 
 			<div class="gf-form">
