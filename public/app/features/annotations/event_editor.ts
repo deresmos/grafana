@@ -31,6 +31,7 @@ export class EventEditorCtrl {
       return;
     }
 
+    this.event.time = moment(this.timeFormated);
     const saveModel = _.cloneDeep(this.event);
     saveModel.time = saveModel.time.valueOf();
     saveModel.timeEnd = 0;
