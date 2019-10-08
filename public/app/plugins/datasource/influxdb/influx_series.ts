@@ -91,8 +91,38 @@ export default class InfluxSeries {
       let timeCol: any = null;
       const tagsCol: any = [];
       let textCol: any = null;
+      let idCol: any = null;
+      let isRegionCol: any = null;
+      let userIdCol: any = null;
+      let loginCol: any = null;
+      let avatarUrlCol: any = null;
+      let emailCol: any = null;
 
       _.each(series.columns, (column, index) => {
+        if (column === 'id') {
+          idCol = index;
+          return;
+        }
+        if (column === 'isRegion') {
+          isRegionCol = index;
+          return;
+        }
+        if (column === 'userId') {
+          userIdCol = index;
+          return;
+        }
+        if (column === 'login') {
+          loginCol = index;
+          return;
+        }
+        if (column === 'avatarUrl') {
+          avatarUrlCol = index;
+          return;
+        }
+        if (column === 'email') {
+          emailCol = index;
+          return;
+        }
         if (column === 'time') {
           timeCol = index;
           return;
@@ -100,7 +130,7 @@ export default class InfluxSeries {
         if (column === 'sequence_number') {
           return;
         }
-        if (column === this.annotation.titleColumn) {
+        if (column === 'title') {
           titleCol = index;
           return;
         }
@@ -113,13 +143,19 @@ export default class InfluxSeries {
           return;
         }
         // legacy case
-        if (!titleCol && textCol !== index) {
-          titleCol = index;
-        }
+        // if (!titleCol && textCol !== index) {
+        //   titleCol = index;
+        // }
       });
 
       _.each(series.values, value => {
         const data = {
+          id: parseInt(value[idCol], 10),
+          isRegion: value[isRegionCol],
+          userId: parseInt(value[userIdCol], 10),
+          login: value[loginCol],
+          avatarUrl: value[avatarUrlCol],
+          email: value[emailCol],
           annotation: this.annotation,
           time: +new Date(value[timeCol]),
           title: value[titleCol],

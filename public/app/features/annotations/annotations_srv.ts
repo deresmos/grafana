@@ -5,6 +5,7 @@ import _ from 'lodash';
 // Components
 import './editor_ctrl';
 import coreModule from 'app/core/core_module';
+import AnnotationInflux from './annotation_influxdb';
 
 // Utils & Services
 import { dedupAnnotations } from './events_processing';
@@ -16,20 +17,25 @@ import DatasourceSrv from '../plugins/datasource_srv';
 import { BackendSrv } from 'app/core/services/backend_srv';
 import { TimeSrv } from '../dashboard/services/TimeSrv';
 import { DataSourceApi } from '@grafana/ui';
+import { ContextSrv } from 'app/core/services/context_srv';
 
-export class AnnotationsSrv {
+export class AnnotationsSrv extends AnnotationInflux {
   globalAnnotationsPromise: any;
   alertStatesPromise: any;
   datasourcePromises: any;
 
   /** @ngInject */
   constructor(
-    private $rootScope: any,
+    $rootScope: any,
     private $q: IQService,
-    private datasourceSrv: DatasourceSrv,
-    private backendSrv: BackendSrv,
-    private timeSrv: TimeSrv
-  ) {}
+    datasourceSrv: DatasourceSrv,
+    backendSrv: BackendSrv,
+    private timeSrv: TimeSrv,
+    $http: any,
+    contextSrv: ContextSrv
+  ) {
+    super($rootScope, datasourceSrv, backendSrv, $http, contextSrv);
+  }
 
   init(dashboard: DashboardModel) {
     // always clearPromiseCaches when loading new dashboard
@@ -42,6 +48,7 @@ export class AnnotationsSrv {
     this.globalAnnotationsPromise = null;
     this.alertStatesPromise = null;
     this.datasourcePromises = null;
+    this.builtInDatasource = this.timeSrv.dashboard.annotations.list[0].datasource;
   }
 
   getAnnotations(options: any) {
@@ -107,6 +114,8 @@ export class AnnotationsSrv {
   getGlobalAnnotations(options: any) {
     const dashboard = options.dashboard;
 
+    this.builtInDatasource = this.timeSrv.dashboard.annotations.list[0].datasource;
+
     if (this.globalAnnotationsPromise) {
       return this.globalAnnotationsPromise;
     }
@@ -153,19 +162,37 @@ export class AnnotationsSrv {
 
   saveAnnotationEvent(annotation: AnnotationEvent) {
     this.globalAnnotationsPromise = null;
-    return this.backendSrv.post('/api/annotations', annotation);
+
+    if (this.builtInDatasource === '-- Grafana --') {
+      return this.backendSrv.post('/api/annotations', annotation);
+    } else {
+      // InfluxDB
+      return this.insertInfluxDB(annotation);
+    }
   }
 
   updateAnnotationEvent(annotation: AnnotationEvent) {
     this.globalAnnotationsPromise = null;
-    return this.backendSrv.put(`/api/annotations/${annotation.id}`, annotation);
+
+    const datasource = annotation.source.datasource;
+    if (datasource === '-- Grafana --') {
+      return this.backendSrv.put(`/api/annotations/${annotation.id}`, annotation);
+    } else {
+      // InfluxDB
+      return this.updateInfluxDB(annotation);
+    }
   }
 
   deleteAnnotationEvent(annotation: AnnotationEvent) {
     this.globalAnnotationsPromise = null;
-    const deleteUrl = `/api/annotations/${annotation.id}`;
+    const datasource = annotation.source.datasource;
+    if (datasource === '-- Grafana --') {
+      const deleteUrl = `/api/annotations/${annotation.id}`;
 
-    return this.backendSrv.delete(deleteUrl);
+      return this.backendSrv.delete(deleteUrl);
+    } else {
+      return this.deleteInfluxDB(annotation);
+    }
   }
 
   translateQueryResult(annotation: any, results: any) {
