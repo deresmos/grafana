@@ -32,6 +32,7 @@ export class EventEditorCtrl {
       return;
     }
 
+    this.event.time = Date.parse(this.timeFormated.replace(/-/g, '/'));
     const saveModel = _.cloneDeep(this.event);
     saveModel.time = saveModel.time.valueOf();
     saveModel.timeEnd = 0;
