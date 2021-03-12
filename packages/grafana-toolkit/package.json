@@ -76,7 +76,7 @@
     "postcss-preset-env": "6.6.0",
     "prettier": "^1.18.2",
     "puppeteer-core": "1.18.1",
-    "react-dev-utils": "^9.0.1",
+    "react-dev-utils": "^11.0.4",
     "replace-in-file": "^4.1.0",
     "replace-in-file-webpack-plugin": "^1.0.6",
     "sass-loader": "7.1.0",
